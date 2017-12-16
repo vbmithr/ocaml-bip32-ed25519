@@ -1,0 +1,10 @@
+(jbuild_version 1)
+
+(executable
+ ((name test)
+  (libraries (hex bip32-ed25519 alcotest))))
+
+(alias
+ ((name    runtest-bip32-ed25519)
+  (deps    (test.exe))
+  (action  (run ${<}))))
