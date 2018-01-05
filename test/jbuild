@@ -2,7 +2,7 @@
 
 (executable
  ((name test)
-  (libraries (hex bip32-ed25519 alcotest))))
+  (libraries (hex nocrypto bip32-ed25519 alcotest))))
 
 (alias
  ((name    runtest-bip32-ed25519)
