@@ -2,8 +2,13 @@ open Tweetnacl
 open Bip32_ed25519
 
 module Crypto = struct
-  let sha256 = Nocrypto.Hash.SHA256.digest
-  let hmac_sha512 = Nocrypto.Hash.SHA512.hmac
+  open Digestif
+  let sha256 s =
+    s |> Cstruct.to_bigarray |> SHA256.Bigstring.digest |> Cstruct.of_bigarray
+  let hmac_sha512 ~key s =
+    let key = Cstruct.to_bigarray key in
+    let s = Cstruct.to_bigarray s in
+    SHA512.Bigstring.hmac ~key s |> Cstruct.of_bigarray
 end
 
 let c = (module Crypto : CRYPTO)
