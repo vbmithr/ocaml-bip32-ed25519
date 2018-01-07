@@ -1,0 +1,22 @@
+opam-version: "1.2"
+name: "bip32-ed25519"
+version: "0.1"
+authors: "Vincent Bernardoff <vb@luminar.eu.org>"
+maintainer: "Vincent Bernardoff <vb@luminar.eu.org>"
+license: "ISC"
+homepage: "https://github.com/vbmithr/ocaml-bip32-ed25519"
+bug-reports: "https://github.com/vbmithr/ocaml-bip32-ed25519/issues"
+dev-repo: "git://github.com/vbmithr/ocaml-bip32-ed25519"
+
+available: [
+  ocaml-version >= "4.02.0"
+]
+
+build: [ "jbuilder" "build" "-j" jobs "-p" name "@install" ]
+depends: [
+  "jbuilder" {build & >= "1.0+beta16"}
+  "hex" {>= "1.2.0"}
+  "cstruct" {>= "3.2.1"}
+  "zarith" {>= "1.7"}
+  "tweetnacl" {>= "0.1"}
+]
