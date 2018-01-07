@@ -16,8 +16,8 @@ let c = (module Crypto : CRYPTO)
 let basic () =
   let sk = random c in
   let pk = neuterize sk in
-  let sk' = derive c sk 0l in
-  let pk' = derive c pk 0l in
+  let sk' = derive_exn c sk 0l in
+  let pk' = derive_exn c pk 0l in
   let pk'' = neuterize sk' in
   Format.printf "\n%a\n%a\n" pp pk' pp pk'';
   assert (equal pk' pk'')

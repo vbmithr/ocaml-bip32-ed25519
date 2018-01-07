@@ -73,6 +73,11 @@ let of_seed crypto seed =
     Some (create (E ek) c [])
   | _ -> None
 
+let of_seed_exn crypto seed =
+  match of_seed crypto seed with
+  | Some k -> k
+  | None -> invalid_arg "of_seed_exn"
+
 let rec random crypto =
   let seed = Rand.gen 32 in
   match of_seed crypto seed with
@@ -111,48 +116,69 @@ let derive_k z (kp : Sign.extended Sign.key) =
   let kp = Sign.to_cstruct kp in
   let kpl = Cstruct.(sub kp 0 32 |> to_string |> Z.of_bits) in
   let kpr = Cstruct.(sub kp 32 32 |> to_string |> Z.of_bits) in
-  if Z.(kpl mod order = zero) then
-    invalid_arg "derive: bad secret child" ;
-  let zl = Cstruct.(sub z 0 28 |> to_string |> Z.of_bits) in
-  let zr = Cstruct.(sub z 32 32 |> to_string |> Z.of_bits) in
-  let kl = Z.(of_int 8 * zl + kpl) in
-  let kr = Z.((zr + kpr) mod (pow (of_int 2)) 256) in
-  let cs = Cstruct.create 64 in
-  Cstruct.blit_from_string (Z.to_bits kl) 0 cs 0 32 ;
-  Cstruct.blit_from_string (Z.to_bits kr) 0 cs 32 32 ;
-  Sign.ek_of_cstruct cs
+  if Z.(kpl mod order = Z.zero) then None
+  else
+    let zl = Cstruct.(sub z 0 28 |> to_string |> Z.of_bits) in
+    let zr = Cstruct.(sub z 32 32 |> to_string |> Z.of_bits) in
+    let kl = Z.(of_int 8 * zl + kpl) in
+    let kr = Z.((zr + kpr) mod (pow (of_int 2)) 256) in
+    let cs = Cstruct.create 64 in
+    Cstruct.blit_from_string (Z.to_bits kl) 0 cs 0 32 ;
+    Cstruct.blit_from_string (Z.to_bits kr) 0 cs 32 32 ;
+    Sign.ek_of_cstruct cs
 
 let derive_a z ap =
   let zl8 = Z.(Cstruct.(sub z 0 28 |> to_string |> of_bits |> mul (of_int 8))) in
   let tweak = Sign.base zl8 in
   let sum = Sign.add ap tweak in
-  if Sign.(equal sum (add sum sum)) then
-    invalid_arg "derive: bad public child" ;
-  sum
+  if Sign.(equal sum (add sum sum)) then None
+  else Some sum
 
-let derive : type a. (module CRYPTO) -> a key -> Int32.t -> a key = fun crypto { k ; c = cp ; path ; _ } i ->
+let derive :
+  type a. (module CRYPTO) -> a key -> Int32.t -> a key option = fun crypto { k ; c = cp ; path ; _ } i ->
   match k, (hardened i) with
   | P _, true ->
     invalid_arg "derive: cannot derive an hardened key from a public key"
   | P kp, false ->
     let z = derive_z crypto k cp i in
     let c = derive_c crypto k cp i in
-    let k = derive_a z kp in
-    create (P k) c (i :: path)
+    begin match derive_a z kp with
+      | None -> None
+      | Some k -> Some (create (P k) c (i :: path))
+    end
   | E kp, false ->
     let pkp = P (Sign.public kp) in
     let z = derive_z crypto pkp cp i in
     let c = derive_c crypto pkp cp i in
-    let k = derive_k z kp in
-    create (E k) c (i :: path)
+    begin match derive_k z kp with
+      | None -> None
+      | Some k -> Some (create (E k) c (i :: path))
+    end
   | E kp, true ->
     let z = derive_z crypto k cp i in
     let c = derive_c crypto k cp i in
-    let k = derive_k z kp in
-    create (E k) c (i :: path)
+    begin match derive_k z kp with
+      | None -> None
+      | Some k -> Some (create (E k) c (i :: path))
+    end
 
-let derive_path : type a. (module CRYPTO) -> a key -> Int32.t list -> a key = fun crypto k path ->
-  ListLabels.fold_left path ~init:k ~f:(derive crypto)
+let derive_exn crypto k i =
+  match derive crypto k i with
+  | Some k -> k
+  | None -> invalid_arg "derive_exn"
+
+let derive_path :
+  type a. (module CRYPTO) -> a key -> Int32.t list -> a key option = fun crypto k path ->
+  ListLabels.fold_left path ~init:(Some k) ~f:begin fun a p ->
+    match a with
+    | None -> None
+    | Some a -> derive crypto a p
+  end
+
+let derive_path_exn crypto k is =
+  match derive_path crypto k is with
+  | Some k -> k
+  | None -> invalid_arg "derive_path_exn"
 
 module Human_readable = struct
   let derivation_of_string d =
