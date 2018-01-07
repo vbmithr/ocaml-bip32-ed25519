@@ -8,13 +8,8 @@ end
 
 let c = (module Crypto : CRYPTO)
 
-let gen_key () =
-  let rec inner i =
-    try i, of_seed c (Rand.gen 32) with _ -> inner (succ i)
-  in inner 0
-
 let basic () =
-  let i, sk = gen_key () in
+  let sk = random c in
   let pk = neuterize sk in
   let sk' = derive c sk 0l in
   let pk' = derive c pk 0l in

@@ -55,21 +55,24 @@ let pp ppf { k ; c ; path ; parent } =
 let create ?(parent=Cstruct.create 20) k c path =
   { k ; c ; path ; parent }
 
-let check_seed seed =
+let of_seed crypto seed =
   let _pk, sk = Sign.keypair ~seed () in
   let ek = Sign.extended sk in
-  if Cstruct.get_uint8 (Sign.to_cstruct ek) 31 land 0x20 <> 0 then
-    invalid_arg "check_seed: bad_entropy" ;
-  ek
+  match Cstruct.get_uint8 (Sign.to_cstruct ek) 31 land 0x20 with
+  | 0 ->
+    let module Crypto = (val crypto : CRYPTO) in
+    let chaincode_preimage = Cstruct.create 33 in
+    Cstruct.set_uint8 chaincode_preimage 0 1 ;
+    Cstruct.blit seed 0 chaincode_preimage 1 32 ;
+    let c = Crypto.sha256 chaincode_preimage in
+    Some (create (E ek) c [])
+  | _ -> None
 
-let of_seed crypto seed =
-  let module Crypto = (val crypto : CRYPTO) in
-  let sk = check_seed seed in
-  let chaincode_preimage = Cstruct.create 33 in
-  Cstruct.set_uint8 chaincode_preimage 0 1 ;
-  Cstruct.blit seed 0 chaincode_preimage 1 32 ;
-  let c = Crypto.sha256 chaincode_preimage in
-  create (E sk) c []
+let rec random crypto =
+  let seed = Rand.gen 32 in
+  match of_seed crypto seed with
+  | Some ek -> ek
+  | None -> random crypto
 
 let derive_zc :
   type a. (module CRYPTO) -> bool -> a kind -> Cstruct.t -> Int32.t -> Cstruct.t = fun crypto derive_c kp cp i ->
