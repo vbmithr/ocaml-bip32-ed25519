@@ -81,7 +81,7 @@ let of_seed_exn crypto seed =
 let rec random crypto =
   let seed = Rand.gen 32 in
   match of_seed crypto seed with
-  | Some ek -> ek
+  | Some ek -> seed, ek
   | None -> random crypto
 
 let derive_zc :

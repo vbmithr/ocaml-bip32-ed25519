@@ -14,7 +14,7 @@ end
 let c = (module Crypto : CRYPTO)
 
 let basic () =
-  let sk = random c in
+  let _seed, sk = random c in
   let pk = neuterize sk in
   let sk' = derive_exn c sk 0l in
   let pk' = derive_exn c pk 0l in

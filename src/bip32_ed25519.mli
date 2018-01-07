@@ -17,7 +17,7 @@ val equal : 'a Sign.key key -> 'a Sign.key key -> bool
 
 val pp : Format.formatter -> _ key -> unit
 
-val random : (module CRYPTO) -> Sign.extended Sign.key key
+val random : (module CRYPTO) -> Cstruct.t * Sign.extended Sign.key key
 val of_seed : (module CRYPTO) -> Cstruct.t -> Sign.extended Sign.key key option
 val of_seed_exn : (module CRYPTO) -> Cstruct.t -> Sign.extended Sign.key key
 val neuterize : _ Sign.key key -> Sign.public Sign.key key
