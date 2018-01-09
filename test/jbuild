@@ -2,7 +2,7 @@
 
 (executable
  ((name test)
-  (libraries (hex digestif.c bip32-ed25519 alcotest))))
+  (libraries (hex digestif.c sodium bip32-ed25519 alcotest))))
 
 (alias
  ((name    runtest-bip32-ed25519)

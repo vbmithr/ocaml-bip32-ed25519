@@ -9,6 +9,12 @@ module Crypto = struct
     let key = Cstruct.to_bigarray key in
     let s = Cstruct.to_bigarray s in
     SHA512.Bigstring.hmac ~key s |> Cstruct.of_bigarray
+  let blake2b ~size s =
+    s |>
+    Cstruct.to_bigarray |>
+    Sodium.Generichash.Bigbytes.digest ~size |>
+    Sodium.Generichash.Bigbytes.of_hash |>
+    Cstruct.of_bigarray
 end
 
 let c = (module Crypto : CRYPTO)
@@ -19,8 +25,26 @@ let basic () =
   let sk' = derive_exn c sk 0l in
   let pk' = derive_exn c pk 0l in
   let pk'' = neuterize sk' in
-  Format.printf "\n%a\n%a\n" pp pk' pp pk'';
-  assert (equal pk' pk'')
+  assert (equal pk' pk'') ;
+  assert (depth sk = 0) ;
+  assert (depth pk = 0) ;
+  assert (depth sk' = 1) ;
+  assert (depth pk' = 1) ;
+  assert (depth pk'' = 1)
+
+let serialization () =
+  let _seed, ek = random c in
+  let pk = neuterize ek in
+  let ek1 = derive_exn c ek 32l in
+  let cs = to_bytes ek in
+  let ek' = of_ek_exn cs in
+  assert (equal ek ek') ;
+  let cs = to_bytes ek1 in
+  let ek1' = of_ek_exn cs in
+  assert (equal ek1 ek1') ;
+  let cs = to_bytes pk in
+  let pk' = of_pk_exn cs in
+  assert (equal pk pk')
 
 module HR = struct
   open Human_readable
@@ -57,6 +81,7 @@ end
 
 let basic = [
   "basic", `Quick, basic ;
+  "serialization", `Quick, serialization ;
 ]
 
 let human_readable = HR.[
