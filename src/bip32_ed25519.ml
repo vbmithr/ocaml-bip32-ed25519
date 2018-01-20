@@ -40,7 +40,10 @@ type 'a key = {
   c : Cstruct.t ;
 }
 
-let write : type a. ?pos:int -> a key -> Cstruct.t -> unit =
+let ek_bytes = 105
+let pk_bytes = 73
+
+let write : type a. ?pos:int -> a key -> Cstruct.t -> int =
   fun ?(pos=0) { depth ; parent_fp ; i ; k ; c } cs ->
     let cs = Cstruct.shift cs pos in
     Cstruct.set_uint8 cs 0 depth ;
@@ -48,13 +51,19 @@ let write : type a. ?pos:int -> a key -> Cstruct.t -> unit =
     Cstruct.BE.set_uint32 cs 5 i ;
     Cstruct.blit c 0 cs 9 32 ;
     match k with
-    | P pk -> Sign.blit_to_cstruct pk cs ~pos:41
-    | E ek -> Sign.blit_to_cstruct ek cs ~pos:41
+    | P pk -> Sign.blit_to_cstruct pk cs ~pos:41 ; pos + pk_bytes
+    | E ek -> Sign.blit_to_cstruct ek cs ~pos:41 ; pos + ek_bytes
 
 let to_bytes : type a. a key -> Cstruct.t = fun ({ k ; _ } as key) ->
   match k with
-  | P _ -> let cs = Cstruct.create_unsafe 73 in write key cs ; cs
-  | E _ -> let cs = Cstruct.create_unsafe 105 in write key cs ; cs
+  | P _ ->
+    let cs = Cstruct.create_unsafe pk_bytes in
+    let (_:int) = write key cs in
+    cs
+  | E _ ->
+    let cs = Cstruct.create_unsafe ek_bytes in
+    let (_:int) = write key cs in
+    cs
 
 let of_pk ?(pos=0) cs =
   let cs = Cstruct.shift cs pos in

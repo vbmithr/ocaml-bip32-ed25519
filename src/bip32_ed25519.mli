@@ -43,7 +43,9 @@ val of_ek_exn : ?pos:int -> Cstruct.t -> Sign.extended Sign.key key
 
 (** {2 Serialization} *)
 
-val write : ?pos:int -> _ Sign.key key -> Cstruct.t -> unit
+val ek_bytes : int
+val pk_bytes : int
+val write : ?pos:int -> _ Sign.key key -> Cstruct.t -> int
 val to_bytes : _ Sign.key key -> Cstruct.t
 
 (** {2 Operation} *)
