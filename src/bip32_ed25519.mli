@@ -6,18 +6,14 @@
 module type CRYPTO = sig
   val sha256 : Cstruct.t -> Cstruct.t
   val hmac_sha512 : key:Cstruct.t -> Cstruct.t -> Cstruct.t
-  val blake2b : size:int -> Cstruct.t -> Cstruct.t
 end
 
 open Tweetnacl
 
 type _ kind
 type 'a key = private {
-  depth : int ;
-  parent_fp : Cstruct.t ;
-  i : Int32.t ;
-  k : 'a kind ;
   c : Cstruct.t ;
+  k : 'a kind ;
 }
 
 val equal : 'a Sign.key key -> 'a Sign.key key -> bool
@@ -25,9 +21,6 @@ val pp : Format.formatter -> _ key -> unit
 
 (** {2 Accessors} *)
 
-val depth : 'a key -> int
-val parent_fingerprint : 'a key -> Cstruct.t
-val child_number : 'a key -> Int32.t
 val key : 'a key -> 'a
 val chaincode : 'a key -> Cstruct.t
 

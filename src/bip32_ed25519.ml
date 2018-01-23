@@ -6,7 +6,6 @@
 module type CRYPTO = sig
   val sha256 : Cstruct.t -> Cstruct.t
   val hmac_sha512 : key:Cstruct.t -> Cstruct.t -> Cstruct.t
-  val blake2b : size:int -> Cstruct.t -> Cstruct.t
 end
 
 open Tweetnacl
@@ -24,35 +23,21 @@ let pp_kind :
   | P pk -> Sign.pp ppf pk
   | E ek -> Sign.pp ppf ek
 
-let fingerprint :
-  type a. (module CRYPTO) -> a kind -> Cstruct.t = fun crypto k ->
-  let module Crypto = (val crypto : CRYPTO) in
-  begin match k with
-  | P pk -> Sign.to_cstruct pk |> Crypto.blake2b ~size:20
-  | E ek -> Sign.to_cstruct ek |> Crypto.blake2b ~size:20
-  end |> fun cs -> Cstruct.sub cs 0 4
-
 type 'a key = {
-  depth : int ;
-  parent_fp : Cstruct.t ;
-  i : Int32.t ;
-  k : 'a kind ;
   c : Cstruct.t ;
+  k : 'a kind ;
 }
 
-let ek_bytes = 105
-let pk_bytes = 73
+let ek_bytes = 64 + 32
+let pk_bytes = 32 + 32
 
 let write : type a. ?pos:int -> a key -> Cstruct.t -> int =
-  fun ?(pos=0) { depth ; parent_fp ; i ; k ; c } cs ->
+  fun ?(pos=0) { k ; c } cs ->
     let cs = Cstruct.shift cs pos in
-    Cstruct.set_uint8 cs 0 depth ;
-    Cstruct.blit parent_fp 0 cs 1 4 ;
-    Cstruct.BE.set_uint32 cs 5 i ;
-    Cstruct.blit c 0 cs 9 32 ;
+    Cstruct.blit c 0 cs 0 32 ;
     match k with
-    | P pk -> Sign.blit_to_cstruct pk cs ~pos:41 ; pos + pk_bytes
-    | E ek -> Sign.blit_to_cstruct ek cs ~pos:41 ; pos + ek_bytes
+    | P pk -> Sign.blit_to_cstruct pk cs ~pos:32 ; pos + pk_bytes
+    | E ek -> Sign.blit_to_cstruct ek cs ~pos:32 ; pos + ek_bytes
 
 let to_bytes : type a. a key -> Cstruct.t = fun ({ k ; _ } as key) ->
   match k with
@@ -67,13 +52,10 @@ let to_bytes : type a. a key -> Cstruct.t = fun ({ k ; _ } as key) ->
 
 let of_pk ?(pos=0) cs =
   let cs = Cstruct.shift cs pos in
-  let depth = Cstruct.get_uint8 cs 0 in
-  let parent_fp = Cstruct.sub cs 1 4 in
-  let i = Cstruct.BE.get_uint32 cs 5 in
-  let c = Cstruct.sub cs 9 32 in
-  match Sign.pk_of_cstruct (Cstruct.sub cs 41 32) with
+  let c = Cstruct.sub cs 0 32 in
+  match Sign.pk_of_cstruct (Cstruct.sub cs 32 32) with
   | None -> None
-  | Some pk -> Some { depth ; parent_fp ; i ; c ; k = (P pk) }
+  | Some pk -> Some { c ; k = (P pk) }
 
 let of_pk_exn ?pos cs =
   match of_pk ?pos cs with
@@ -82,25 +64,20 @@ let of_pk_exn ?pos cs =
 
 let of_ek ?(pos=0) cs =
   let cs = Cstruct.shift cs pos in
-  let depth = Cstruct.get_uint8 cs 0 in
-  let parent_fp = Cstruct.sub cs 1 4 in
-  let i = Cstruct.BE.get_uint32 cs 5 in
-  let c = Cstruct.sub cs 9 32 in
-  match Sign.ek_of_cstruct (Cstruct.sub cs 41 64) with
+  let c = Cstruct.sub cs 0 32 in
+  match Sign.ek_of_cstruct (Cstruct.sub cs 32 64) with
   | None -> None
-  | Some ek -> Some { depth ; parent_fp ; i ; c ; k = (E ek) }
+  | Some ek -> Some { c ; k = (E ek) }
 
 let of_ek_exn ?pos cs =
   match of_ek ?pos cs with
   | None -> invalid_arg "of_ek_exn"
   | Some ek -> ek
 
-let equal { k ; _ } { k = k' ; _ } =
-  Sign.equal (tweet_of_kind k) (tweet_of_kind k')
+let equal { k ; c } { k = k' ; c = c' } =
+  Sign.equal (tweet_of_kind k) (tweet_of_kind k') &&
+  Cstruct.equal c c'
 
-let depth { depth } = depth
-let parent_fingerprint { parent_fp } = parent_fp
-let child_number { i } = i
 let key { k ; _ } = tweet_of_kind k
 let chaincode { c } = c
 
@@ -117,15 +94,13 @@ let pp_print_path ppf i =
   if hardened i then Format.fprintf ppf "%ld'" (of_hardened i)
   else Format.fprintf ppf "%ld" i
 
-let pp ppf { depth ; parent_fp ; i ; k ; c } =
-  Format.fprintf ppf "@[<hov 0>key %a@ chaincode %a@ depth %d@ i %ld@ parent %a@]"
+let pp ppf { k ; c } =
+  Format.fprintf ppf "@[<hov 0>key %a@ chaincode %a@]"
     pp_kind k
     Hex.pp (Hex.of_cstruct c)
-    depth i
-    Hex.pp (Hex.of_cstruct parent_fp)
 
-let create ?(parent_fp=Cstruct.create 20) depth i k c =
-  { depth ; parent_fp ; i ; k ; c }
+let create k c =
+  { k ; c }
 
 let of_seed crypto ?(pos=0) seed =
   let seed = Cstruct.shift seed pos in
@@ -138,7 +113,7 @@ let of_seed crypto ?(pos=0) seed =
     Cstruct.set_uint8 chaincode_preimage 0 1 ;
     Cstruct.blit seed 0 chaincode_preimage 1 32 ;
     let c = Crypto.sha256 chaincode_preimage in
-    Some (create 0 0l (E ek) c)
+    Some (create (E ek) c)
   | _ -> None
 
 let of_seed_exn crypto ?pos seed =
@@ -203,8 +178,7 @@ let derive_a z ap =
   else Some sum
 
 let derive :
-  type a. (module CRYPTO) -> a key -> Int32.t -> a key option = fun crypto { k ; c = cp ; depth ; _ } i ->
-  let parent_fp = fingerprint crypto k in
+  type a. (module CRYPTO) -> a key -> Int32.t -> a key option = fun crypto { k ; c = cp } i ->
   match k, (hardened i) with
   | P _, true ->
     invalid_arg "derive: cannot derive an hardened key from a public key"
@@ -213,7 +187,7 @@ let derive :
     let c = derive_c crypto k cp i in
     begin match derive_a z kp with
       | None -> None
-      | Some k -> Some (create ~parent_fp (succ depth) i (P k) c)
+      | Some k -> Some (create (P k) c)
     end
   | E kp, false ->
     let pkp = P (Sign.public kp) in
@@ -221,14 +195,14 @@ let derive :
     let c = derive_c crypto pkp cp i in
     begin match derive_k z kp with
       | None -> None
-      | Some k -> Some (create ~parent_fp (succ depth) i (E k) c)
+      | Some k -> Some (create (E k) c)
     end
   | E kp, true ->
     let z = derive_z crypto k cp i in
     let c = derive_c crypto k cp i in
     begin match derive_k z kp with
       | None -> None
-      | Some k -> Some (create ~parent_fp (succ depth) i (E k) c)
+      | Some k -> Some (create (E k) c)
     end
 
 let derive_exn crypto k i =

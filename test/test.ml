@@ -25,12 +25,7 @@ let basic () =
   let sk' = derive_exn c sk 0l in
   let pk' = derive_exn c pk 0l in
   let pk'' = neuterize sk' in
-  assert (equal pk' pk'') ;
-  assert (depth sk = 0) ;
-  assert (depth pk = 0) ;
-  assert (depth sk' = 1) ;
-  assert (depth pk' = 1) ;
-  assert (depth pk'' = 1)
+  assert (equal pk' pk'')
 
 let serialization () =
   let _seed, ek = random c in
