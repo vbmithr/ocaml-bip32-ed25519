@@ -31,13 +31,12 @@ type 'a key = {
 let ek_bytes = 64 + 32
 let pk_bytes = 32 + 32
 
-let write : type a. ?pos:int -> a key -> Cstruct.t -> int =
-  fun ?(pos=0) { k ; c } cs ->
-    let cs = Cstruct.shift cs pos in
+let write : type a. a key -> Cstruct.t -> int =
+  fun { k ; c } cs ->
     Cstruct.blit c 0 cs 0 32 ;
     match k with
-    | P pk -> Sign.blit_to_cstruct pk cs ~pos:32 ; pos + pk_bytes
-    | E ek -> Sign.blit_to_cstruct ek cs ~pos:32 ; pos + ek_bytes
+    | P pk -> Sign.blit_to_cstruct pk cs ~pos:32 ; pk_bytes
+    | E ek -> Sign.blit_to_cstruct ek cs ~pos:32 ; ek_bytes
 
 let to_bytes : type a. a key -> Cstruct.t = fun ({ k ; _ } as key) ->
   match k with
@@ -50,27 +49,25 @@ let to_bytes : type a. a key -> Cstruct.t = fun ({ k ; _ } as key) ->
     let (_:int) = write key cs in
     cs
 
-let of_pk ?(pos=0) cs =
-  let cs = Cstruct.shift cs pos in
+let of_pk  cs =
   let c = Cstruct.sub cs 0 32 in
   match Sign.pk_of_cstruct (Cstruct.sub cs 32 32) with
   | None -> None
   | Some pk -> Some { c ; k = (P pk) }
 
-let of_pk_exn ?pos cs =
-  match of_pk ?pos cs with
+let of_pk_exn cs =
+  match of_pk cs with
   | None -> invalid_arg "of_pk_exn"
   | Some pk -> pk
 
-let of_ek ?(pos=0) cs =
-  let cs = Cstruct.shift cs pos in
+let of_ek cs =
   let c = Cstruct.sub cs 0 32 in
   match Sign.ek_of_cstruct (Cstruct.sub cs 32 64) with
   | None -> None
   | Some ek -> Some { c ; k = (E ek) }
 
-let of_ek_exn ?pos cs =
-  match of_ek ?pos cs with
+let of_ek_exn cs =
+  match of_ek cs with
   | None -> invalid_arg "of_ek_exn"
   | Some ek -> ek
 
@@ -102,30 +99,23 @@ let pp ppf { k ; c } =
 let create k c =
   { k ; c }
 
-let of_seed crypto ?(pos=0) seed =
-  let seed = Cstruct.shift seed pos in
+let of_seed crypto seed =
   let _pk, sk = Sign.keypair ~seed () in
   let ek = Sign.extended sk in
-  match Cstruct.get_uint8 (Sign.to_cstruct ek) 31 land 0x20 with
-  | 0 ->
-    let module Crypto = (val crypto : CRYPTO) in
-    let chaincode_preimage = Cstruct.create 33 in
-    Cstruct.set_uint8 chaincode_preimage 0 1 ;
-    Cstruct.blit seed 0 chaincode_preimage 1 32 ;
-    let c = Crypto.sha256 chaincode_preimage in
-    Some (create (E ek) c)
-  | _ -> None
+  (* set ek bit to 0 *)
+  let cek = Sign.to_cstruct ek in
+  let bi = (Cstruct.get_uint8 cek 31) land (lnot 0x20) in
+  Cstruct.set_uint8 cek 31 bi;
+  let module Crypto = (val crypto : CRYPTO) in
+  let chaincode_preimage = Cstruct.create 33 in
+  Cstruct.set_uint8 chaincode_preimage 0 1 ;
+  Cstruct.blit seed 0 chaincode_preimage 1 32 ;
+  let c = Crypto.sha256 chaincode_preimage in
+  create (E ek) c
 
-let of_seed_exn crypto ?pos seed =
-  match of_seed ?pos crypto seed with
-  | Some k -> k
-  | None -> invalid_arg "of_seed_exn"
-
-let rec random crypto =
+let random crypto =
   let seed = Rand.gen 32 in
-  match of_seed crypto seed with
-  | Some ek -> seed, ek
-  | None -> random crypto
+  seed, of_seed crypto seed
 
 let derive_zc :
   type a. (module CRYPTO) -> bool -> a kind -> Cstruct.t -> Int32.t -> Cstruct.t = fun crypto derive_c kp cp i ->
