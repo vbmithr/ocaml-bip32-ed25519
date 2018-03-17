@@ -27,18 +27,17 @@ val chaincode : 'a key -> Cstruct.t
 (** {2 Creation} *)
 
 val random : (module CRYPTO) -> Cstruct.t * Sign.extended Sign.key key
-val of_seed : (module CRYPTO) -> ?pos:int -> Cstruct.t -> Sign.extended Sign.key key option
-val of_seed_exn : (module CRYPTO) -> ?pos:int -> Cstruct.t -> Sign.extended Sign.key key
-val of_pk : ?pos:int -> Cstruct.t -> Sign.public Sign.key key option
-val of_pk_exn : ?pos:int -> Cstruct.t -> Sign.public Sign.key key
-val of_ek : ?pos:int -> Cstruct.t -> Sign.extended Sign.key key option
-val of_ek_exn : ?pos:int -> Cstruct.t -> Sign.extended Sign.key key
+val of_seed : (module CRYPTO) -> Cstruct.t -> Sign.extended Sign.key key
+val of_pk : Cstruct.t -> Sign.public Sign.key key option
+val of_pk_exn : Cstruct.t -> Sign.public Sign.key key
+val of_ek :  Cstruct.t -> Sign.extended Sign.key key option
+val of_ek_exn : Cstruct.t -> Sign.extended Sign.key key
 
 (** {2 Serialization} *)
 
 val ek_bytes : int
 val pk_bytes : int
-val write : ?pos:int -> _ Sign.key key -> Cstruct.t -> int
+val write : _ Sign.key key -> Cstruct.t -> int
 val to_bytes : _ Sign.key key -> Cstruct.t
 
 (** {2 Operation} *)
@@ -65,7 +64,10 @@ module Human_readable : sig
   type t = Int32.t list
 
   val of_string_exn : string -> t
+
+  (** Converts a path such as "1/2'/3/44" to a list of integers *)
   val of_string : string -> t option
+
   val to_string : t -> string
   val pp : Format.formatter -> t -> unit
 end
