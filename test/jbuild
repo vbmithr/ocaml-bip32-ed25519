@@ -2,9 +2,21 @@
 
 (executable
  ((name test)
-  (libraries (hex digestif.c sodium bip32-ed25519 alcotest))))
+  (libraries (hex digestif.c sodium bip32-ed25519 alcotest))
+  (modules (Test))))
+
+
+(executable
+ ((name test_vector)
+  (libraries (hex bip32-ed25519 nocrypto yojson))
+  (modules (Test_vector))))
 
 (alias
  ((name    runtest-bip32-ed25519)
   (deps    (test.exe))
+  (action  (run ${<}))))
+
+(alias
+ ((name	   runtest-vector)
+  (deps    (test_vector.exe))
   (action  (run ${<}))))
