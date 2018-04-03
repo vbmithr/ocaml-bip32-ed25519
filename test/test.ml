@@ -2,29 +2,18 @@ open Tweetnacl
 open Bip32_ed25519
 
 module Crypto = struct
-  open Digestif
-  let sha256 s =
-    s |> Cstruct.to_bigarray |> SHA256.Bigstring.digest |> Cstruct.of_bigarray
-  let hmac_sha512 ~key s =
-    let key = Cstruct.to_bigarray key in
-    let s = Cstruct.to_bigarray s in
-    SHA512.Bigstring.hmac ~key s |> Cstruct.of_bigarray
-  let blake2b ~size s =
-    s |>
-    Cstruct.to_bigarray |>
-    Sodium.Generichash.Bigbytes.digest ~size |>
-    Sodium.Generichash.Bigbytes.of_hash |>
-    Cstruct.of_bigarray
+  let sha256 = Nocrypto.Hash.SHA256.digest
+  let hmac_sha512 = Nocrypto.Hash.SHA512.hmac
 end
 
 let c = (module Crypto : CRYPTO)
 
 let basic () =
-  let _seed, sk = random c in
-  let pk = neuterize sk in
-  let sk' = derive_exn c sk 0l in
+  let _seed, ek = random c in
+  let pk = neuterize ek in
+  let ek' = derive_exn c ek 0l in
   let pk' = derive_exn c pk 0l in
-  let pk'' = neuterize sk' in
+  let pk'' = neuterize ek' in
   assert (equal pk' pk'')
 
 let serialization () =
