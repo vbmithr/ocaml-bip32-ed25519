@@ -83,8 +83,8 @@ let run ic =
         let expected_cP = Bip32.chaincode expected_node in
         let expected_ek = Bip32.key expected_node in
         let expected_pk = Tweetnacl.Sign.public expected_ek in
-        let expected_aP = Tweetnacl.Sign.to_cstruct expected_pk in
-        let cs = Tweetnacl.Sign.to_cstruct expected_ek in
+        let expected_aP = Tweetnacl.Sign.to_bytes expected_pk |> Cstruct.of_bigarray in
+        let cs = Tweetnacl.Sign.to_bytes expected_ek |> Cstruct.of_bigarray in
         let expected_kLP = Cstruct.sub cs 0 32 in
         let expected_kRP = Cstruct.sub cs 32 32 in
 

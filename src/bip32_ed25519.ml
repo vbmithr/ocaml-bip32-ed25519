@@ -18,11 +18,6 @@ let tweet_of_kind : type a. a kind -> a = function
   | P pk -> pk
   | E ek -> ek
 
-let pp_kind :
-  type a. Format.formatter -> a kind -> unit = fun ppf -> function
-  | P pk -> Sign.pp ppf pk
-  | E ek -> Sign.pp ppf ek
-
 type 'a key = {
   c : Cstruct.t ;
   k : 'a kind ;
@@ -36,8 +31,8 @@ let write : type a. ?pos:int -> a key -> Cstruct.t -> int =
     let cs = Cstruct.shift cs pos in
     Cstruct.blit c 0 cs 0 32 ;
     match k with
-    | P pk -> Sign.blit_to_cstruct pk cs ~pos:32 ; pos + pk_bytes
-    | E ek -> Sign.blit_to_cstruct ek cs ~pos:32 ; pos + ek_bytes
+    | P pk -> Sign.blit_to_bytes pk (Cstruct.to_bigarray cs) ~pos:32 ; pos + pk_bytes
+    | E ek -> Sign.blit_to_bytes ek (Cstruct.to_bigarray cs) ~pos:32 ; pos + ek_bytes
 
 let to_bytes : type a. a key -> Cstruct.t = fun ({ k ; _ } as key) ->
   match k with
@@ -53,7 +48,7 @@ let to_bytes : type a. a key -> Cstruct.t = fun ({ k ; _ } as key) ->
 let of_pk ?(pos=0) cs =
   let cs = Cstruct.shift cs pos in
   let c = Cstruct.sub cs 0 32 in
-  match Sign.pk_of_cstruct (Cstruct.sub cs 32 32) with
+  match Sign.pk_of_bytes Cstruct.(to_bigarray (sub cs 32 32)) with
   | None -> None
   | Some pk -> Some { c ; k = (P pk) }
 
@@ -65,7 +60,7 @@ let of_pk_exn ?pos cs =
 let of_ek ?(pos=0) cs =
   let cs = Cstruct.shift cs pos in
   let c = Cstruct.sub cs 0 32 in
-  match Sign.ek_of_cstruct (Cstruct.sub cs 32 64) with
+  match Sign.ek_of_bytes Cstruct.(to_bigarray (sub cs 32 64)) with
   | None -> None
   | Some ek -> Some { c ; k = (E ek) }
 
@@ -94,19 +89,14 @@ let pp_print_path ppf i =
   if hardened i then Format.fprintf ppf "%ld'" (of_hardened i)
   else Format.fprintf ppf "%ld" i
 
-let pp ppf { k ; c } =
-  Format.fprintf ppf "@[<hov 0>key %a@ chaincode %a@]"
-    pp_kind k
-    Hex.pp (Hex.of_cstruct c)
-
 let create k c =
   { k ; c }
 
 let of_seed crypto ?(pos=0) seed =
   let seed = Cstruct.shift seed pos in
-  let _pk, sk = Sign.keypair ~seed () in
+  let _pk, sk = Sign.keypair ~seed:(Cstruct.to_bigarray seed) () in
   let ek = Sign.extended sk in
-  match Cstruct.get_uint8 (Sign.to_cstruct ek) 31 land 0x20 with
+  match Cstruct.get_uint8 (Cstruct.of_bigarray (Sign.to_bytes ek)) 31 land 0x20 with
   | 0 ->
     let module Crypto = (val crypto : CRYPTO) in
     let chaincode_preimage = Cstruct.create 33 in
@@ -122,7 +112,7 @@ let of_seed_exn crypto ?pos seed =
   | None -> invalid_arg "of_seed_exn"
 
 let rec random crypto =
-  let seed = Rand.gen 32 in
+  let seed = Cstruct.of_bigarray (Rand.gen 32) in
   match of_seed crypto seed with
   | Some ek -> seed, ek
   | None -> random crypto
@@ -133,13 +123,13 @@ let derive_zc :
     | E ek ->
       let cs = Cstruct.create 69 in
       if derive_c then Cstruct.set_uint8 cs 0 1 ;
-      Cstruct.blit (Sign.to_cstruct ek) 0 cs 1 64 ;
+      Cstruct.(blit (of_bigarray (Sign.to_bytes ek)) 0 cs 1 64) ;
       Cstruct.LE.set_uint32 cs 65 i ;
       cs
     | P pk ->
       let cs = Cstruct.create 37 in
       Cstruct.set_uint8 cs 0 (if derive_c then 3 else 2) ;
-      Cstruct.blit (Sign.to_cstruct pk) 0 cs 1 32 ;
+      Cstruct.(blit (of_bigarray (Sign.to_bytes pk)) 0 cs 1 32) ;
       Cstruct.LE.set_uint32 cs 33 i ;
       cs
   end |> fun cs ->
@@ -156,7 +146,7 @@ let order =
   Z.(of_int 2 ** 252 + of_string "27742317777372353535851937790883648493")
 
 let derive_k z (kp : Sign.extended Sign.key) =
-  let kp = Sign.to_cstruct kp in
+  let kp = Cstruct.of_bigarray (Sign.to_bytes kp) in
   let kpl = Cstruct.(sub kp 0 32 |> to_string |> Z.of_bits) in
   let kpr = Cstruct.(sub kp 32 32 |> to_string |> Z.of_bits) in
   if Z.(kpl mod order = Z.zero) then None
@@ -168,7 +158,7 @@ let derive_k z (kp : Sign.extended Sign.key) =
     let cs = Cstruct.create 64 in
     Cstruct.blit_from_string (Z.to_bits kl) 0 cs 0 32 ;
     Cstruct.blit_from_string (Z.to_bits kr) 0 cs 32 32 ;
-    Sign.ek_of_cstruct cs
+    Sign.ek_of_bytes (Cstruct.to_bigarray cs)
 
 let derive_a z ap =
   let zl8 = Z.(Cstruct.(sub z 0 28 |> to_string |> of_bits |> mul (of_int 8))) in

@@ -17,7 +17,6 @@ type 'a key = private {
 }
 
 val equal : 'a Sign.key key -> 'a Sign.key key -> bool
-val pp : Format.formatter -> _ key -> unit
 
 (** {2 Accessors} *)
 
