@@ -2,8 +2,8 @@ open Tweetnacl
 open Bip32_ed25519
 
 module Crypto = struct
-  let sha256 = Nocrypto.Hash.SHA256.digest
-  let hmac_sha512 = Nocrypto.Hash.SHA512.hmac
+  let sha256 = Digestif.SHA256.Bigstring.digest
+  let hmac_sha512 = Digestif.SHA512.Bigstring.hmac
 end
 
 let c = (module Crypto : CRYPTO)
@@ -20,14 +20,14 @@ let serialization () =
   let _seed, ek = random c in
   let pk = neuterize ek in
   let ek1 = derive_exn c ek 32l in
-  let cs = to_bytes ek in
-  let ek' = of_ek_exn cs in
+  let buf = to_bytes ek in
+  let ek' = unsafe_ek_of_bytes_exn buf in
   assert (equal ek ek') ;
-  let cs = to_bytes ek1 in
-  let ek1' = of_ek_exn cs in
+  let buf = to_bytes ek1 in
+  let ek1' = unsafe_ek_of_bytes_exn buf in
   assert (equal ek1 ek1') ;
-  let cs = to_bytes pk in
-  let pk' = of_pk_exn cs in
+  let buf = to_bytes pk in
+  let pk' = unsafe_pk_of_bytes_exn buf in
   assert (equal pk pk')
 
 module HR = struct

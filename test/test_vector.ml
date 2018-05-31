@@ -1,23 +1,23 @@
 module Bip32 = Bip32_ed25519
 
 type vector = {
-  secret : Cstruct.t ;
+  secret : Bigstring.t ;
   node : node option ;
   path : int32 list ;
 }
 
 and node = {
-  kLP : Cstruct.t ;
-  kRP : Cstruct.t ;
-  cP : Cstruct.t ;
-  aP : Cstruct.t ;
+  kLP : Bigstring.t ;
+  kRP : Bigstring.t ;
+  cP : Bigstring.t ;
+  aP : Bigstring.t ;
 }
 
-let cs_encoding =
+let bs_encoding =
   let open Json_encoding in
   conv
-    (fun cs -> let `Hex hex = Hex.of_cstruct cs in hex)
-    (fun hex_str -> Hex.to_cstruct (`Hex hex_str))
+    (fun bs -> let `Hex hex = Hex.of_cstruct (Cstruct.of_bigarray bs) in hex)
+    (fun hex_str -> Cstruct.to_bigarray (Hex.to_cstruct (`Hex hex_str)))
     string
 
 let node_encoding =
@@ -26,10 +26,10 @@ let node_encoding =
     (fun { kLP ; kRP ; cP ; aP } -> (kLP, kRP, cP, aP))
     (fun (kLP, kRP, cP, aP) -> { kLP ; kRP ; cP ; aP })
     (obj4
-       (req "kLP" cs_encoding)
-       (req "kRP" cs_encoding)
-       (req "cP" cs_encoding)
-       (req "AP" cs_encoding))
+       (req "kLP" bs_encoding)
+       (req "kRP" bs_encoding)
+       (req "cP" bs_encoding)
+       (req "AP" bs_encoding))
 
 let node_or_null_encoding =
   let open Json_encoding in
@@ -51,13 +51,13 @@ let vector_encoding =
     (fun { secret ; node ; path } -> (secret, node, path))
     (fun (secret, node, path) -> { secret ; node ; path })
     (obj3
-       (req "secret" cs_encoding)
+       (req "secret" bs_encoding)
        (req "node" node_or_null_encoding)
        (req "path" path_encoding))
 
 module Crypto = struct
-  let sha256 = Nocrypto.Hash.SHA256.digest
-  let hmac_sha512 = Nocrypto.Hash.SHA512.hmac
+  let sha256 = Digestif.SHA256.Bigstring.digest
+  let hmac_sha512 = Digestif.SHA512.Bigstring.hmac
 end
 
 let with_ic ic ~f =
@@ -83,15 +83,15 @@ let run ic =
         let expected_cP = Bip32.chaincode expected_node in
         let expected_ek = Bip32.key expected_node in
         let expected_pk = Tweetnacl.Sign.public expected_ek in
-        let expected_aP = Tweetnacl.Sign.to_cstruct expected_pk in
-        let cs = Tweetnacl.Sign.to_cstruct expected_ek in
-        let expected_kLP = Cstruct.sub cs 0 32 in
-        let expected_kRP = Cstruct.sub cs 32 32 in
+        let expected_aP = Tweetnacl.Sign.to_bytes expected_pk in
+        let bs = Tweetnacl.Sign.to_bytes expected_ek in
+        let expected_kLP = Bigstring.sub bs 0 32 in
+        let expected_kRP = Bigstring.sub bs 32 32 in
 
-        assert (Cstruct.equal expected_kLP kLP) ;
-        assert (Cstruct.equal expected_kRP kRP) ;
-        assert (Cstruct.equal expected_aP aP) ;
-        assert (Cstruct.equal expected_cP cP) ;
+        assert (Bigstring.equal expected_kLP kLP) ;
+        assert (Bigstring.equal expected_kRP kRP) ;
+        assert (Bigstring.equal expected_aP aP) ;
+        assert (Bigstring.equal expected_cP cP) ;
         Printf.eprintf ".%!"
   done
 

@@ -4,84 +4,110 @@
   ---------------------------------------------------------------------------*)
 
 module type CRYPTO = sig
-  val sha256 : Cstruct.t -> Cstruct.t
-  val hmac_sha512 : key:Cstruct.t -> Cstruct.t -> Cstruct.t
+  val sha256 : Bigstring.t -> Bigstring.t
+  val hmac_sha512 : key:Bigstring.t -> Bigstring.t -> Bigstring.t
 end
 
 open Tweetnacl
 
-type _ kind =
-  | P : Sign.public Sign.key -> Sign.public Sign.key kind
-  | E : Sign.extended Sign.key -> Sign.extended Sign.key kind
+type _ key =
+  | P : Sign.public Sign.key -> Sign.public Sign.key key
+  | E : Sign.extended Sign.key -> Sign.extended Sign.key key
 
-let tweet_of_kind : type a. a kind -> a = function
+let length_of_kind : type a. a key -> int = function
+  | P _ -> 32
+  | E _ -> 64
+
+let tweet_of_kind : type a. a key -> a = function
   | P pk -> pk
   | E ek -> ek
 
-let pp_kind :
-  type a. Format.formatter -> a kind -> unit = fun ppf -> function
-  | P pk -> Sign.pp ppf pk
-  | E ek -> Sign.pp ppf ek
-
-type 'a key = {
-  c : Cstruct.t ;
-  k : 'a kind ;
+type 'a t = {
+  c : Bigstring.t ;
+  k : 'a key ;
 }
 
 let ek_bytes = 64 + 32
 let pk_bytes = 32 + 32
 
-let write : type a. ?pos:int -> a key -> Cstruct.t -> int =
-  fun ?(pos=0) { k ; c } cs ->
-    let cs = Cstruct.shift cs pos in
-    Cstruct.blit c 0 cs 0 32 ;
-    match k with
-    | P pk -> Sign.blit_to_cstruct pk cs ~pos:32 ; pos + pk_bytes
-    | E ek -> Sign.blit_to_cstruct ek cs ~pos:32 ; pos + ek_bytes
+let blit_to_bytes { k ; c } ?(pos=0) buf =
+  let buflen = Bigstring.length buf in
+  let min_buflen = length_of_kind k in
+  if buflen < pos + min_buflen then 0
+  else begin
+    Bigstring.blit c 0 buf pos 32 ;
+    Sign.blit_to_bytes (tweet_of_kind k) ~pos:(pos+32) buf ;
+    32 + length_of_kind k
+  end
 
-let to_bytes : type a. a key -> Cstruct.t = fun ({ k ; _ } as key) ->
-  match k with
-  | P _ ->
-    let cs = Cstruct.create_unsafe pk_bytes in
-    let (_:int) = write key cs in
-    cs
-  | E _ ->
-    let cs = Cstruct.create_unsafe ek_bytes in
-    let (_:int) = write key cs in
-    cs
+let to_bytes ({ k ; _ } as key) =
+  let buf = Bigstring.create (32 + length_of_kind k) in
+  let (_:int) = blit_to_bytes key buf in
+  buf
 
-let of_pk ?(pos=0) cs =
-  let cs = Cstruct.shift cs pos in
-  let c = Cstruct.sub cs 0 32 in
-  match Sign.pk_of_cstruct (Cstruct.sub cs 32 32) with
-  | None -> None
-  | Some pk -> Some { c ; k = (P pk) }
+let unsafe_pk_of_bytes ?(pos=0) buf =
+  let buflen = Bigstring.length buf in
+  if pos < 0 || buflen - pos < pk_bytes then None
+  else
+    let c = Bigstring.sub buf pos 32 in
+    match Sign.unsafe_pk_of_bytes (Bigstring.sub buf (pos+32) 32) with
+    | None -> None
+    | Some pk -> Some { c ; k = (P pk) }
 
-let of_pk_exn ?pos cs =
-  match of_pk ?pos cs with
-  | None -> invalid_arg "of_pk_exn"
+let unsafe_pk_of_bytes_exn ?pos buf =
+  match unsafe_pk_of_bytes ?pos buf with
+  | None -> invalid_arg "unsafe_pk_of_bytes_exn"
   | Some pk -> pk
 
-let of_ek ?(pos=0) cs =
-  let cs = Cstruct.shift cs pos in
-  let c = Cstruct.sub cs 0 32 in
-  match Sign.ek_of_cstruct (Cstruct.sub cs 32 64) with
-  | None -> None
-  | Some ek -> Some { c ; k = (E ek) }
+let pk_of_bytes ?(pos=0) buf =
+  let buflen = Bigstring.length buf in
+  if pos < 0 || buflen - pos < pk_bytes then None
+  else
+    let buf2 = Bigstring.create pk_bytes in
+    Bigstring.blit buf pos buf2 0 pk_bytes ;
+    unsafe_pk_of_bytes buf2
 
-let of_ek_exn ?pos cs =
-  match of_ek ?pos cs with
-  | None -> invalid_arg "of_ek_exn"
-  | Some ek -> ek
+let pk_of_bytes_exn ?pos buf =
+  match pk_of_bytes ?pos buf with
+  | None -> invalid_arg "pk_of_bytes_exn"
+  | Some pk -> pk
+
+let unsafe_ek_of_bytes ?(pos=0) buf =
+  let buflen = Bigstring.length buf in
+  if pos < 0 || buflen - pos < ek_bytes then None
+  else
+    let c = Bigstring.sub buf pos 32 in
+    match Sign.unsafe_ek_of_bytes (Bigstring.sub buf (pos+32) 64) with
+    | None -> None
+    | Some ek -> Some { c ; k = (E ek) }
+
+let unsafe_ek_of_bytes_exn ?pos buf =
+  match unsafe_ek_of_bytes ?pos buf with
+  | None -> invalid_arg "unsafe_ek_of_bytes_exn"
+  | Some pk -> pk
+
+let ek_of_bytes ?(pos=0) buf =
+  let buflen = Bigstring.length buf in
+  if pos < 0 || buflen - pos < ek_bytes then None
+  else
+    let buf2 = Bigstring.create ek_bytes in
+    Bigstring.blit buf pos buf2 0 ek_bytes ;
+    unsafe_ek_of_bytes buf2
+
+let ek_of_bytes_exn ?pos buf =
+  match ek_of_bytes ?pos buf with
+  | None -> invalid_arg "ek_of_bytes_exn"
+  | Some pk -> pk
 
 let equal { k ; c } { k = k' ; c = c' } =
   Sign.equal (tweet_of_kind k) (tweet_of_kind k') &&
-  Cstruct.equal c c'
+  Bigstring.equal c c'
 
 let key { k ; _ } = tweet_of_kind k
 let chaincode { c } = c
 
-let neuterize : type a. a Sign.key key -> Sign.public Sign.key key = fun ({ k ; _ } as key) ->
+let neuterize :
+  type a. a Sign.key t -> Sign.public Sign.key t = fun ({ k ; _ } as key) ->
   match k with
   | P _ as pk -> { key with k = pk }
   | E ek -> { key with k = P (Sign.public ek) }
@@ -90,28 +116,18 @@ let hardened i = Int32.logand i 0x8000_0000l <> 0l
 let of_hardened = Int32.logand 0x7fff_ffffl
 let to_hardened = Int32.logor 0x8000_0000l
 
-let pp_print_path ppf i =
-  if hardened i then Format.fprintf ppf "%ld'" (of_hardened i)
-  else Format.fprintf ppf "%ld" i
-
-let pp ppf { k ; c } =
-  Format.fprintf ppf "@[<hov 0>key %a@ chaincode %a@]"
-    pp_kind k
-    Hex.pp (Hex.of_cstruct c)
-
 let create k c =
   { k ; c }
 
 let of_seed crypto ?(pos=0) seed =
-  let seed = Cstruct.shift seed pos in
-  let _pk, sk = Sign.keypair ~seed () in
+  let _pk, sk = Sign.keypair ~seed:(Bigstring.sub seed pos 32) () in
   let ek = Sign.extended sk in
-  match Cstruct.get_uint8 (Sign.to_cstruct ek) 31 land 0x20 with
+  match (Char.code (Bigstring.get (Sign.to_bytes ek) 31)) land 0x20 with
   | 0 ->
     let module Crypto = (val crypto : CRYPTO) in
-    let chaincode_preimage = Cstruct.create 33 in
-    Cstruct.set_uint8 chaincode_preimage 0 1 ;
-    Cstruct.blit seed 0 chaincode_preimage 1 32 ;
+    let chaincode_preimage = Bigstring.create 33 in
+    Bigstring.set chaincode_preimage 0 '\x01' ;
+    Bigstring.blit seed 0 chaincode_preimage 1 32 ;
     let c = Crypto.sha256 chaincode_preimage in
     Some (create (E ek) c)
   | _ -> None
@@ -128,57 +144,60 @@ let rec random crypto =
   | None -> random crypto
 
 let derive_zc :
-  type a. (module CRYPTO) -> bool -> a kind -> Cstruct.t -> Int32.t -> Cstruct.t = fun crypto derive_c kp cp i ->
+  type a. (module CRYPTO) -> bool -> a key ->
+  Bigstring.t -> Int32.t -> Bigstring.t = fun crypto derive_c kp cp i ->
   begin match kp with
     | E ek ->
-      let cs = Cstruct.create 69 in
-      if derive_c then Cstruct.set_uint8 cs 0 1 ;
-      Cstruct.blit (Sign.to_cstruct ek) 0 cs 1 64 ;
-      Cstruct.LE.set_uint32 cs 65 i ;
-      cs
+      let buf = Bigstring.create 69 in
+      Bigstring.fill buf '\x00' ;
+      if derive_c then Bigstring.set buf 0 '\x01' ;
+      Bigstring.blit (Sign.to_bytes ek) 0 buf 1 64 ;
+      EndianBigstring.LittleEndian.set_int32 buf 65 i ;
+      buf
     | P pk ->
-      let cs = Cstruct.create 37 in
-      Cstruct.set_uint8 cs 0 (if derive_c then 3 else 2) ;
-      Cstruct.blit (Sign.to_cstruct pk) 0 cs 1 32 ;
-      Cstruct.LE.set_uint32 cs 33 i ;
-      cs
-  end |> fun cs ->
+      let buf = Bigstring.create 37 in
+      Bigstring.fill buf '\x00' ;
+      Bigstring.set buf 0 (if derive_c then '\x03' else '\x02') ;
+      Bigstring.blit (Sign.to_bytes pk) 0 buf 1 32 ;
+      EndianBigstring.LittleEndian.set_int32 buf 33 i ;
+      buf
+  end |> fun buf ->
   let module Crypto = (val crypto : CRYPTO) in
-  Crypto.hmac_sha512 ~key:cp cs
+  Crypto.hmac_sha512 ~key:cp buf
 
 let derive_z crypto k c i =
   derive_zc crypto false k c i
 
 let derive_c crypto kp cp i =
-  Cstruct.sub (derive_zc crypto true kp cp i) 32 32
+  Bigstring.sub (derive_zc crypto true kp cp i) 32 32
 
 let order =
   Z.(of_int 2 ** 252 + of_string "27742317777372353535851937790883648493")
 
 let derive_k z (kp : Sign.extended Sign.key) =
-  let kp = Sign.to_cstruct kp in
-  let kpl = Cstruct.(sub kp 0 32 |> to_string |> Z.of_bits) in
-  let kpr = Cstruct.(sub kp 32 32 |> to_string |> Z.of_bits) in
+  let kp = Sign.to_bytes kp in
+  let kpl = Bigstring.(sub kp 0 32 |> to_string |> Z.of_bits) in
+  let kpr = Bigstring.(sub kp 32 32 |> to_string |> Z.of_bits) in
   if Z.(kpl mod order = Z.zero) then None
   else
-    let zl = Cstruct.(sub z 0 28 |> to_string |> Z.of_bits) in
-    let zr = Cstruct.(sub z 32 32 |> to_string |> Z.of_bits) in
+    let zl = Bigstring.(sub z 0 28 |> to_string |> Z.of_bits) in
+    let zr = Bigstring.(sub z 32 32 |> to_string |> Z.of_bits) in
     let kl = Z.(of_int 8 * zl + kpl) in
     let kr = Z.((zr + kpr) mod (pow (of_int 2)) 256) in
-    let cs = Cstruct.create 64 in
-    Cstruct.blit_from_string (Z.to_bits kl) 0 cs 0 32 ;
-    Cstruct.blit_from_string (Z.to_bits kr) 0 cs 32 32 ;
-    Sign.ek_of_cstruct cs
+    let buf = Bigstring.create 64 in
+    Bigstring.blit_of_string (Z.to_bits kl) 0 buf 0 32 ;
+    Bigstring.blit_of_string (Z.to_bits kr) 0 buf 32 32 ;
+    Sign.ek_of_bytes buf
 
 let derive_a z ap =
-  let zl8 = Z.(Cstruct.(sub z 0 28 |> to_string |> of_bits |> mul (of_int 8))) in
+  let zl8 = Z.(Bigstring.(sub z 0 28 |> to_string |> of_bits |> mul (of_int 8))) in
   let tweak = Sign.base zl8 in
   let sum = Sign.add ap tweak in
   if Sign.(equal sum (add sum sum)) then None
   else Some sum
 
 let derive :
-  type a. (module CRYPTO) -> a key -> Int32.t -> a key option = fun crypto { k ; c = cp } i ->
+  type a. (module CRYPTO) -> a t -> Int32.t -> a t option = fun crypto { k ; c = cp } i ->
   match k, (hardened i) with
   | P _, true ->
     invalid_arg "derive: cannot derive an hardened key from a public key"
@@ -211,7 +230,7 @@ let derive_exn crypto k i =
   | None -> invalid_arg "derive_exn"
 
 let derive_path :
-  type a. (module CRYPTO) -> a key -> Int32.t list -> a key option = fun crypto k path ->
+  type a. (module CRYPTO) -> a t -> Int32.t list -> a t option = fun crypto k path ->
   ListLabels.fold_left path ~init:(Some k) ~f:begin fun a p ->
     match a with
     | None -> None

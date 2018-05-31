@@ -2,13 +2,13 @@
 
 (executable
  ((name test)
-  (libraries (hex digestif.c nocrypto bip32-ed25519 alcotest))
+  (libraries (hex digestif.c bip32-ed25519 alcotest))
   (modules (Test))))
 
 
 (executable
  ((name test_vector)
-  (libraries (hex bip32-ed25519 nocrypto ezjsonm ocplib-json-typed))
+  (libraries (hex bip32-ed25519 digestif.c ezjsonm ocplib-json-typed))
   (modules (Test_vector))))
 
 (alias
@@ -16,11 +16,11 @@
   (deps ((alias runtest-basic)))))
 
 (alias
- ((name    runtest-basic)
+ ((name    runtest_bip32_ed25519_basic)
   (deps    (test.exe))
   (action  (run ${<}))))
 
 (alias
- ((name	   runtest-vectors)
+ ((name	   runtest_bip32_ed25519_vectors)
   (deps    (test_vector.exe test_vectors/test_vectors.json))
   (action  (run ${^}))))

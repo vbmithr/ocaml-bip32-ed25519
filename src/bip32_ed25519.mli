@@ -4,56 +4,58 @@
   ---------------------------------------------------------------------------*)
 
 module type CRYPTO = sig
-  val sha256 : Cstruct.t -> Cstruct.t
-  val hmac_sha512 : key:Cstruct.t -> Cstruct.t -> Cstruct.t
+  val sha256 : Bigstring.t -> Bigstring.t
+  val hmac_sha512 : key:Bigstring.t -> Bigstring.t -> Bigstring.t
 end
 
 open Tweetnacl
 
-type _ kind
-type 'a key = private {
-  c : Cstruct.t ;
-  k : 'a kind ;
-}
+type _ t
 
-val equal : 'a Sign.key key -> 'a Sign.key key -> bool
-val pp : Format.formatter -> _ key -> unit
+val equal : 'a Sign.key t -> 'a Sign.key t -> bool
 
 (** {2 Accessors} *)
 
-val key : 'a key -> 'a
-val chaincode : 'a key -> Cstruct.t
+val key : 'a t -> 'a
+val chaincode : _ t -> Bigstring.t
 
 (** {2 Creation} *)
 
-val random : (module CRYPTO) -> Cstruct.t * Sign.extended Sign.key key
-val of_seed : (module CRYPTO) -> ?pos:int -> Cstruct.t -> Sign.extended Sign.key key option
-val of_seed_exn : (module CRYPTO) -> ?pos:int -> Cstruct.t -> Sign.extended Sign.key key
-val of_pk : ?pos:int -> Cstruct.t -> Sign.public Sign.key key option
-val of_pk_exn : ?pos:int -> Cstruct.t -> Sign.public Sign.key key
-val of_ek : ?pos:int -> Cstruct.t -> Sign.extended Sign.key key option
-val of_ek_exn : ?pos:int -> Cstruct.t -> Sign.extended Sign.key key
+val random : (module CRYPTO) -> Bigstring.t * Sign.extended Sign.key t
+val of_seed : (module CRYPTO) -> ?pos:int -> Bigstring.t -> Sign.extended Sign.key t option
+val of_seed_exn : (module CRYPTO) -> ?pos:int -> Bigstring.t -> Sign.extended Sign.key t
 
-(** {2 Serialization} *)
+(** {2 IO} *)
 
 val ek_bytes : int
 val pk_bytes : int
-val write : ?pos:int -> _ Sign.key key -> Cstruct.t -> int
-val to_bytes : _ Sign.key key -> Cstruct.t
+
+val unsafe_pk_of_bytes : ?pos:int -> Bigstring.t -> Sign.public Sign.key t option
+val unsafe_pk_of_bytes_exn : ?pos:int -> Bigstring.t -> Sign.public Sign.key t
+val pk_of_bytes : ?pos:int -> Bigstring.t -> Sign.public Sign.key t option
+val pk_of_bytes_exn : ?pos:int -> Bigstring.t -> Sign.public Sign.key t
+
+val unsafe_ek_of_bytes : ?pos:int -> Bigstring.t -> Sign.extended Sign.key t option
+val unsafe_ek_of_bytes_exn : ?pos:int -> Bigstring.t -> Sign.extended Sign.key t
+val ek_of_bytes : ?pos:int -> Bigstring.t -> Sign.extended Sign.key t option
+val ek_of_bytes_exn : ?pos:int -> Bigstring.t -> Sign.extended Sign.key t
+
+val blit_to_bytes : _ Sign.key t -> ?pos:int -> Bigstring.t -> int
+val to_bytes : _ Sign.key t -> Bigstring.t
 
 (** {2 Operation} *)
 
-val neuterize : _ Sign.key key -> Sign.public Sign.key key
+val neuterize : _ Sign.key t -> Sign.public Sign.key t
 
 val derive :
-  (module CRYPTO) -> 'a key -> Int32.t -> 'a key option
+  (module CRYPTO) -> 'a t -> Int32.t -> 'a t option
 val derive_exn :
-  (module CRYPTO) -> 'a key -> Int32.t -> 'a key
+  (module CRYPTO) -> 'a t -> Int32.t -> 'a t
 
 val derive_path :
-  (module CRYPTO) -> 'a key -> Int32.t list -> 'a key option
+  (module CRYPTO) -> 'a t -> Int32.t list -> 'a t option
 val derive_path_exn :
-  (module CRYPTO) -> 'a key -> Int32.t list -> 'a key
+  (module CRYPTO) -> 'a t -> Int32.t list -> 'a t
 
 val hardened : Int32.t -> bool
 val of_hardened : Int32.t -> Int32.t
