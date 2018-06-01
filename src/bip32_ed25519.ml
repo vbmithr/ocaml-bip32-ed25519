@@ -8,11 +8,11 @@ module type CRYPTO = sig
   val hmac_sha512 : key:Bigstring.t -> Bigstring.t -> Bigstring.t
 end
 
-open Tweetnacl
+open Monocypher
 
 type _ key =
-  | P : Sign.public Sign.key -> Sign.public Sign.key key
-  | E : Sign.extended Sign.key -> Sign.extended Sign.key key
+  | P : public Sign.key -> public Sign.key key
+  | E : extended Sign.key -> extended Sign.key key
 
 let length_of_kind : type a. a key -> int = function
   | P _ -> 32
@@ -36,7 +36,7 @@ let blit_to_bytes { k ; c } ?(pos=0) buf =
   if buflen < pos + min_buflen then 0
   else begin
     Bigstring.blit c 0 buf pos 32 ;
-    Sign.blit_to_bytes (tweet_of_kind k) ~pos:(pos+32) buf ;
+    let (_:int) = Sign.blit (tweet_of_kind k) buf (pos+32) in
     32 + length_of_kind k
   end
 
@@ -47,57 +47,35 @@ let to_bytes ({ k ; _ } as key) =
 
 let unsafe_pk_of_bytes ?(pos=0) buf =
   let buflen = Bigstring.length buf in
-  if pos < 0 || buflen - pos < pk_bytes then None
-  else
-    let c = Bigstring.sub buf pos 32 in
-    match Sign.unsafe_pk_of_bytes (Bigstring.sub buf (pos+32) 32) with
-    | None -> None
-    | Some pk -> Some { c ; k = (P pk) }
-
-let unsafe_pk_of_bytes_exn ?pos buf =
-  match unsafe_pk_of_bytes ?pos buf with
-  | None -> invalid_arg "unsafe_pk_of_bytes_exn"
-  | Some pk -> pk
+  if pos < 0 || buflen - pos < pk_bytes then
+    invalid_arg "unsafe_pk_of_bytes" ;
+  let c = Bigstring.sub buf pos 32 in
+  let pk = Sign.unsafe_pk_of_bytes (Bigstring.sub buf (pos+32) 32) in
+  { c ; k = (P pk) }
 
 let pk_of_bytes ?(pos=0) buf =
   let buflen = Bigstring.length buf in
-  if pos < 0 || buflen - pos < pk_bytes then None
-  else
-    let buf2 = Bigstring.create pk_bytes in
-    Bigstring.blit buf pos buf2 0 pk_bytes ;
-    unsafe_pk_of_bytes buf2
-
-let pk_of_bytes_exn ?pos buf =
-  match pk_of_bytes ?pos buf with
-  | None -> invalid_arg "pk_of_bytes_exn"
-  | Some pk -> pk
+  if pos < 0 || buflen - pos < pk_bytes then
+    invalid_arg "pk_of_bytes" ;
+  let buf2 = Bigstring.create pk_bytes in
+  Bigstring.blit buf pos buf2 0 pk_bytes ;
+  unsafe_pk_of_bytes buf2
 
 let unsafe_ek_of_bytes ?(pos=0) buf =
   let buflen = Bigstring.length buf in
-  if pos < 0 || buflen - pos < ek_bytes then None
-  else
-    let c = Bigstring.sub buf pos 32 in
-    match Sign.unsafe_ek_of_bytes (Bigstring.sub buf (pos+32) 64) with
-    | None -> None
-    | Some ek -> Some { c ; k = (E ek) }
-
-let unsafe_ek_of_bytes_exn ?pos buf =
-  match unsafe_ek_of_bytes ?pos buf with
-  | None -> invalid_arg "unsafe_ek_of_bytes_exn"
-  | Some pk -> pk
+  if pos < 0 || buflen - pos < ek_bytes then
+    invalid_arg "unsafe_ek_of_bytes" ;
+  let c = Bigstring.sub buf pos 32 in
+  let ek = Sign.unsafe_ek_of_bytes (Bigstring.sub buf (pos+32) 64) in
+  { c ; k = (E ek) }
 
 let ek_of_bytes ?(pos=0) buf =
   let buflen = Bigstring.length buf in
-  if pos < 0 || buflen - pos < ek_bytes then None
-  else
-    let buf2 = Bigstring.create ek_bytes in
-    Bigstring.blit buf pos buf2 0 ek_bytes ;
-    unsafe_ek_of_bytes buf2
-
-let ek_of_bytes_exn ?pos buf =
-  match ek_of_bytes ?pos buf with
-  | None -> invalid_arg "ek_of_bytes_exn"
-  | Some pk -> pk
+  if pos < 0 || buflen - pos < ek_bytes then
+    invalid_arg "ek_of_bytes" ;
+  let buf2 = Bigstring.create ek_bytes in
+  Bigstring.blit buf pos buf2 0 ek_bytes ;
+  unsafe_ek_of_bytes buf2
 
 let equal { k ; c } { k = k' ; c = c' } =
   Sign.equal (tweet_of_kind k) (tweet_of_kind k') &&
@@ -107,10 +85,10 @@ let key { k ; _ } = tweet_of_kind k
 let chaincode { c } = c
 
 let neuterize :
-  type a. a Sign.key t -> Sign.public Sign.key t = fun ({ k ; _ } as key) ->
+  type a. a Sign.key t -> public Sign.key t = fun ({ k ; _ } as key) ->
   match k with
   | P _ as pk -> { key with k = pk }
-  | E ek -> { key with k = P (Sign.public ek) }
+  | E ek -> { key with k = P (Sign.neuterize ek) }
 
 let hardened i = Int32.logand i 0x8000_0000l <> 0l
 let of_hardened = Int32.logand 0x7fff_ffffl
@@ -120,9 +98,14 @@ let create k c =
   { k ; c }
 
 let of_seed crypto ?(pos=0) seed =
-  let _pk, sk = Sign.keypair ~seed:(Bigstring.sub seed pos 32) () in
-  let ek = Sign.extended sk in
-  match (Char.code (Bigstring.get (Sign.to_bytes ek) 31)) land 0x20 with
+  let seedlen = Bigstring.length seed in
+  if seedlen - pos < Sign.skbytes then
+    invalid_arg "of_seed" ;
+  let sk =
+    Sign.unsafe_sk_of_bytes (Bigstring.sub seed pos Sign.skbytes) in
+  let ek = Sign.extend sk in
+  let ekbuf = Sign.buffer ek in
+  match (Char.code (Bigstring.get ekbuf 31)) land 0x20 with
   | 0 ->
     let module Crypto = (val crypto : CRYPTO) in
     let chaincode_preimage = Bigstring.create 33 in
@@ -151,14 +134,14 @@ let derive_zc :
       let buf = Bigstring.create 69 in
       Bigstring.fill buf '\x00' ;
       if derive_c then Bigstring.set buf 0 '\x01' ;
-      Bigstring.blit (Sign.to_bytes ek) 0 buf 1 64 ;
+      Bigstring.blit (Sign.buffer ek) 0 buf 1 64 ;
       EndianBigstring.LittleEndian.set_int32 buf 65 i ;
       buf
     | P pk ->
       let buf = Bigstring.create 37 in
       Bigstring.fill buf '\x00' ;
       Bigstring.set buf 0 (if derive_c then '\x03' else '\x02') ;
-      Bigstring.blit (Sign.to_bytes pk) 0 buf 1 32 ;
+      Bigstring.blit (Sign.buffer pk) 0 buf 1 32 ;
       EndianBigstring.LittleEndian.set_int32 buf 33 i ;
       buf
   end |> fun buf ->
@@ -174,8 +157,8 @@ let derive_c crypto kp cp i =
 let order =
   Z.(of_int 2 ** 252 + of_string "27742317777372353535851937790883648493")
 
-let derive_k z (kp : Sign.extended Sign.key) =
-  let kp = Sign.to_bytes kp in
+let derive_k z (kp : extended Sign.key) =
+  let kp = Sign.buffer kp in
   let kpl = Bigstring.(sub kp 0 32 |> to_string |> Z.of_bits) in
   let kpr = Bigstring.(sub kp 32 32 |> to_string |> Z.of_bits) in
   if Z.(kpl mod order = Z.zero) then None
@@ -187,13 +170,13 @@ let derive_k z (kp : Sign.extended Sign.key) =
     let buf = Bigstring.create 64 in
     Bigstring.blit_of_string (Z.to_bits kl) 0 buf 0 32 ;
     Bigstring.blit_of_string (Z.to_bits kr) 0 buf 32 32 ;
-    Sign.ek_of_bytes buf
+    Some (Sign.unsafe_ek_of_bytes buf)
 
 let derive_a z ap =
   let zl8 = Z.(Bigstring.(sub z 0 28 |> to_string |> of_bits |> mul (of_int 8))) in
-  let tweak = Sign.base zl8 in
-  let sum = Sign.add ap tweak in
-  if Sign.(equal sum (add sum sum)) then None
+  let tweak = Ed25519.scalarmult_base zl8 in
+  let sum = Ed25519.add ap tweak in
+  if Ed25519.(equal sum (add sum sum)) then None
   else Some sum
 
 let derive :
@@ -204,12 +187,12 @@ let derive :
   | P kp, false ->
     let z = derive_z crypto k cp i in
     let c = derive_c crypto k cp i in
-    begin match derive_a z kp with
+    begin match derive_a z (Ed25519.of_pk kp) with
       | None -> None
-      | Some k -> Some (create (P k) c)
+      | Some k -> Some (create (P (Ed25519.to_pk k)) c)
     end
   | E kp, false ->
-    let pkp = P (Sign.public kp) in
+    let pkp = P (Sign.neuterize kp) in
     let z = derive_z crypto pkp cp i in
     let c = derive_c crypto pkp cp i in
     begin match derive_k z kp with

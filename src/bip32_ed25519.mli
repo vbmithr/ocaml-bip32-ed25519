@@ -8,7 +8,7 @@ module type CRYPTO = sig
   val hmac_sha512 : key:Bigstring.t -> Bigstring.t -> Bigstring.t
 end
 
-open Tweetnacl
+open Monocypher
 
 type _ t
 
@@ -21,31 +21,27 @@ val chaincode : _ t -> Bigstring.t
 
 (** {2 Creation} *)
 
-val random : (module CRYPTO) -> Bigstring.t * Sign.extended Sign.key t
-val of_seed : (module CRYPTO) -> ?pos:int -> Bigstring.t -> Sign.extended Sign.key t option
-val of_seed_exn : (module CRYPTO) -> ?pos:int -> Bigstring.t -> Sign.extended Sign.key t
+val random : (module CRYPTO) -> Bigstring.t * extended Sign.key t
+val of_seed : (module CRYPTO) -> ?pos:int -> Bigstring.t -> extended Sign.key t option
+val of_seed_exn : (module CRYPTO) -> ?pos:int -> Bigstring.t -> extended Sign.key t
 
 (** {2 IO} *)
 
 val ek_bytes : int
 val pk_bytes : int
 
-val unsafe_pk_of_bytes : ?pos:int -> Bigstring.t -> Sign.public Sign.key t option
-val unsafe_pk_of_bytes_exn : ?pos:int -> Bigstring.t -> Sign.public Sign.key t
-val pk_of_bytes : ?pos:int -> Bigstring.t -> Sign.public Sign.key t option
-val pk_of_bytes_exn : ?pos:int -> Bigstring.t -> Sign.public Sign.key t
+val unsafe_pk_of_bytes : ?pos:int -> Bigstring.t -> public Sign.key t
+val pk_of_bytes : ?pos:int -> Bigstring.t -> public Sign.key t
 
-val unsafe_ek_of_bytes : ?pos:int -> Bigstring.t -> Sign.extended Sign.key t option
-val unsafe_ek_of_bytes_exn : ?pos:int -> Bigstring.t -> Sign.extended Sign.key t
-val ek_of_bytes : ?pos:int -> Bigstring.t -> Sign.extended Sign.key t option
-val ek_of_bytes_exn : ?pos:int -> Bigstring.t -> Sign.extended Sign.key t
+val unsafe_ek_of_bytes : ?pos:int -> Bigstring.t -> extended Sign.key t
+val ek_of_bytes : ?pos:int -> Bigstring.t -> extended Sign.key t
 
 val blit_to_bytes : _ Sign.key t -> ?pos:int -> Bigstring.t -> int
 val to_bytes : _ Sign.key t -> Bigstring.t
 
 (** {2 Operation} *)
 
-val neuterize : _ Sign.key t -> Sign.public Sign.key t
+val neuterize : _ Sign.key t -> public Sign.key t
 
 val derive :
   (module CRYPTO) -> 'a t -> Int32.t -> 'a t option

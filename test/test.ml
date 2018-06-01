@@ -1,4 +1,4 @@
-open Tweetnacl
+open Monocypher
 open Bip32_ed25519
 
 module Crypto = struct
@@ -8,26 +8,31 @@ end
 
 let c = (module Crypto : CRYPTO)
 
-let basic () =
+let basic_one i =
   let _seed, ek = random c in
   let pk = neuterize ek in
   let ek' = derive_exn c ek 0l in
   let pk' = derive_exn c pk 0l in
   let pk'' = neuterize ek' in
-  assert (equal pk' pk'')
+  Alcotest.(check bool (Printf.sprintf "basic %d" i) true (Bip32_ed25519.equal pk' pk''))
+
+let basic () =
+  for i = 0 to 10 do
+    basic_one i
+  done
 
 let serialization () =
   let _seed, ek = random c in
   let pk = neuterize ek in
   let ek1 = derive_exn c ek 32l in
   let buf = to_bytes ek in
-  let ek' = unsafe_ek_of_bytes_exn buf in
+  let ek' = unsafe_ek_of_bytes buf in
   assert (equal ek ek') ;
   let buf = to_bytes ek1 in
-  let ek1' = unsafe_ek_of_bytes_exn buf in
+  let ek1' = unsafe_ek_of_bytes buf in
   assert (equal ek1 ek1') ;
   let buf = to_bytes pk in
-  let pk' = unsafe_pk_of_bytes_exn buf in
+  let pk' = unsafe_pk_of_bytes buf in
   assert (equal pk pk')
 
 module HR = struct

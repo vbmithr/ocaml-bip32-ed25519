@@ -76,15 +76,17 @@ let run ic =
     | None -> assert (node = None)
     | Some root ->
       match node, (Bip32.derive_path (module Crypto) root path) with
-      | Some _, None
-      | None, Some _ -> assert false
+      | Some _, None ->
+        Printf.printf "Bleh.\n%!" ; assert false
+      | None, Some _ ->
+        Printf.printf "Bleh2.\n%!" ; assert false
       | None, None -> ()
       | Some { kLP ; kRP ; cP ; aP }, Some expected_node ->
         let expected_cP = Bip32.chaincode expected_node in
         let expected_ek = Bip32.key expected_node in
-        let expected_pk = Tweetnacl.Sign.public expected_ek in
-        let expected_aP = Tweetnacl.Sign.to_bytes expected_pk in
-        let bs = Tweetnacl.Sign.to_bytes expected_ek in
+        let expected_pk = Monocypher.Sign.neuterize expected_ek in
+        let expected_aP = Monocypher.Sign.buffer expected_pk in
+        let bs = Monocypher.Sign.buffer expected_ek in
         let expected_kLP = Bigstring.sub bs 0 32 in
         let expected_kRP = Bigstring.sub bs 32 32 in
 

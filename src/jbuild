@@ -1,4 +1,4 @@
 (library
  ((name bip32_ed25519)
   (public_name bip32-ed25519)
-  (libraries (hex cstruct zarith tweetnacl))))
+  (libraries (hex cstruct zarith ocplib-endian.bigstring monocypher))))
