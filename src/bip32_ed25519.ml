@@ -14,11 +14,11 @@ type _ key =
   | P : public Sign.key -> public Sign.key key
   | E : extended Sign.key -> extended Sign.key key
 
-let length_of_kind : type a. a key -> int = function
+let length_of_key : type a. a key -> int = function
   | P _ -> 32
   | E _ -> 64
 
-let tweet_of_kind : type a. a key -> a = function
+let underlying_key : type a. a key -> a = function
   | P pk -> pk
   | E ek -> ek
 
@@ -32,16 +32,16 @@ let pk_bytes = 32 + 32
 
 let blit_to_bytes { k ; c } ?(pos=0) buf =
   let buflen = Bigstring.length buf in
-  let min_buflen = length_of_kind k in
+  let min_buflen = length_of_key k in
   if buflen < pos + min_buflen then 0
   else begin
     Bigstring.blit c 0 buf pos 32 ;
-    let (_:int) = Sign.blit (tweet_of_kind k) buf (pos+32) in
-    32 + length_of_kind k
+    let (_:int) = Sign.blit (underlying_key k) buf (pos+32) in
+    32 + length_of_key k
   end
 
 let to_bytes ({ k ; _ } as key) =
-  let buf = Bigstring.create (32 + length_of_kind k) in
+  let buf = Bigstring.create (32 + length_of_key k) in
   let (_:int) = blit_to_bytes key buf in
   buf
 
@@ -78,10 +78,10 @@ let ek_of_bytes ?(pos=0) buf =
   unsafe_ek_of_bytes buf2
 
 let equal { k ; c } { k = k' ; c = c' } =
-  Sign.equal (tweet_of_kind k) (tweet_of_kind k') &&
+  Sign.equal (underlying_key k) (underlying_key k') &&
   Bigstring.equal c c'
 
-let key { k ; _ } = tweet_of_kind k
+let key { k ; _ } = underlying_key k
 let chaincode { c } = c
 
 let neuterize :
