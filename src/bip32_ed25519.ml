@@ -27,6 +27,10 @@ type 'a t = {
   k : 'a key ;
 }
 
+let wipe { c ; k } =
+  wipe c ;
+  Sign.wipe (underlying_key k)
+
 let ek_bytes = 64 + 32
 let pk_bytes = 32 + 32
 

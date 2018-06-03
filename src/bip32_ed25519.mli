@@ -12,6 +12,7 @@ open Monocypher
 
 type _ t
 
+val wipe : _ Sign.key t -> unit
 val equal : 'a Sign.key t -> 'a Sign.key t -> bool
 
 (** {2 Accessors} *)
