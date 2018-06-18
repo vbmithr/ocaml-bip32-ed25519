@@ -229,38 +229,45 @@ let derive_path_exn crypto k is =
   | Some k -> k
   | None -> invalid_arg "derive_path_exn"
 
-
 module Human_readable = struct
-  let derivation_of_string d =
-    match String.(get d (length d - 1)) with
-    | '\'' ->
-      let v = String.(sub d 0 (length d - 1)) |> Int32.of_string in
-      to_hardened v
-    | _ ->
-      Int32.of_string d
+  type node = Int32.t
 
-  let string_of_derivation = function
-    | i when hardened i -> Int32.to_string (of_hardened i) ^ "'"
-    | i -> Int32.to_string i
+  let node_of_string str =
+    match Int32.of_string_opt str with
+    | Some node -> Some node
+    | None ->
+      match Int32.of_string_opt String.(sub str 0 ((length str) - 1)) with
+      | None -> None
+      | Some node -> Some (to_hardened node)
 
-  type t = Int32.t list
+  let node_of_string_exn str =
+    match node_of_string str with
+    | None ->
+      invalid_arg (Printf.sprintf "node_of_string_exn: got %S" str)
+    | Some str -> str
 
-  let of_string_exn s =
+  let pp_node ppf node =
+    match hardened node with
+    | true -> Fmt.pf ppf "%ld'" (of_hardened node)
+    | false -> Fmt.pf ppf "%ld" node
+
+  let string_of_node = Fmt.to_to_string pp_node
+
+  type path = Int32.t list
+
+  let path_of_string_exn s =
     match String.split_on_char '/' s with
     | [""] -> []
-    | derivations -> List.map derivation_of_string derivations
-    | exception _ ->
-        invalid_arg (Printf.sprintf "Human_readable.of_string_exn: got %S" s)
+    | nodes ->
+      List.map node_of_string_exn nodes
 
-  let of_string s =
-    try Some (of_string_exn s) with _ -> None
+  let path_of_string s =
+    try Some (path_of_string_exn s) with _ -> None
 
-  let to_string t =
-    List.map string_of_derivation t |>
-    String.concat "/"
+  let pp_path =
+    Fmt.(list ~sep:(const char '/') pp_node)
 
-  let pp ppf t =
-    Format.pp_print_string ppf (to_string t)
+  let string_of_path = Fmt.to_to_string pp_path
 end
 
 (*---------------------------------------------------------------------------

@@ -41,8 +41,8 @@ let node_or_null_encoding =
 let path_encoding =
   let open Json_encoding in
   conv
-    Bip32.Human_readable.to_string
-    Bip32.Human_readable.of_string_exn
+    Bip32.Human_readable.string_of_path
+    Bip32.Human_readable.path_of_string_exn
     string
 
 let vector_encoding =

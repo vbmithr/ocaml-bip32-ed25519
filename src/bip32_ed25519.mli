@@ -61,12 +61,19 @@ val to_hardened : Int32.t -> Int32.t
 (** {2 Path IO} *)
 
 module Human_readable : sig
-  type t = Int32.t list
+  type node = Int32.t
 
-  val of_string_exn : string -> t
-  val of_string : string -> t option
-  val to_string : t -> string
-  val pp : Format.formatter -> t -> unit
+  val node_of_string : string -> node option
+  val node_of_string_exn : string -> node
+  val pp_node : node Fmt.t
+  val string_of_node : node -> string
+
+  type path = node list
+
+  val path_of_string : string -> path option
+  val path_of_string_exn : string -> path
+  val pp_path : path Fmt.t
+  val string_of_path : path -> string
 end
 
 (*---------------------------------------------------------------------------

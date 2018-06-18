@@ -38,7 +38,7 @@ let serialization () =
 module HR = struct
   open Human_readable
   let of_string () =
-    match of_string "44'/1'/0'/0/0" with
+    match path_of_string "44'/1'/0'/0/0" with
     | None -> assert false
     | Some [a; b; c; 0l; 0l] when
         a = to_hardened 44l &&
@@ -48,23 +48,23 @@ module HR = struct
 
   let to_string () =
     let res =
-      to_string [to_hardened 44l; to_hardened 1l; to_hardened 0l; 0l; 0l] in
+      string_of_path [to_hardened 44l; to_hardened 1l; to_hardened 0l; 0l; 0l] in
     Printf.printf "%s\n%!" res ;
     assert (res = "44'/1'/0'/0/0") ;
-    let res = to_string [] in
+    let res = string_of_path [] in
     assert (res = "") ;
-    let res = to_string [to_hardened 2l; 123l] in
+    let res = string_of_path [to_hardened 2l; 123l] in
     assert (res = "2'/123")
 
   let of_string_exn_fail () =
-    match of_string_exn "//" with
+    match path_of_string_exn "//" with
     | exception _ -> ()
     | _ -> assert false
 
   let of_string_exn_success () =
-    ignore (of_string_exn "") ;
-    ignore (of_string_exn "1/2") ;
-    ignore (of_string_exn "1/2'/3'/0") ;
+    ignore (path_of_string_exn "") ;
+    ignore (path_of_string_exn "1/2") ;
+    ignore (path_of_string_exn "1/2'/3'/0") ;
     ()
 end
 
