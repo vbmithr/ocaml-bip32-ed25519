@@ -22,10 +22,18 @@ let underlying_key : type a. a key -> a = function
   | P pk -> pk
   | E ek -> ek
 
+let copy_key : type a. a key -> a key = function
+  | P pk -> P (Sign.copy pk)
+  | E ek -> E (Sign.copy ek)
+
 type 'a t = {
   c : Bigstring.t ;
   k : 'a key ;
 }
+
+let copy { c ; k } =
+  { c = Bigstring.copy c ;
+    k = copy_key k }
 
 let wipe { c ; k } =
   wipe c ;
