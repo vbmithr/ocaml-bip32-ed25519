@@ -226,7 +226,7 @@ let derive_exn crypto k i =
 
 let derive_path :
   type a. (module CRYPTO) -> a t -> Int32.t list -> a t option = fun crypto k path ->
-  ListLabels.fold_left path ~init:(Some k) ~f:begin fun a p ->
+  ListLabels.fold_left path ~init:(Some (copy k)) ~f:begin fun a p ->
     match a with
     | None -> None
     | Some a -> derive crypto a p
