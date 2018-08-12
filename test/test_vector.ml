@@ -56,8 +56,8 @@ let vector_encoding =
        (req "path" path_encoding))
 
 module Crypto = struct
-  let sha256 = Digestif.SHA256.Bigstring.digest
-  let hmac_sha512 = Digestif.SHA512.Bigstring.hmac
+  let sha256 = Hacl.Hash.SHA256.digest
+  let hmac_sha512 ~key msg = Hacl.Hash.SHA512.HMAC.digest ~key ~msg
 end
 
 let with_ic ic ~f =

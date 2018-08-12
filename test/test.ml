@@ -2,8 +2,8 @@ open Monocypher
 open Bip32_ed25519
 
 module Crypto = struct
-  let sha256 = Digestif.SHA256.Bigstring.digest
-  let hmac_sha512 = Digestif.SHA512.Bigstring.hmac
+  let sha256 = Hacl.Hash.SHA256.digest
+  let hmac_sha512 ~key msg = Hacl.Hash.SHA512.HMAC.digest ~key ~msg
 end
 
 let c = (module Crypto : CRYPTO)
