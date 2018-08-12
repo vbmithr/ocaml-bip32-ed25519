@@ -1,0 +1,14 @@
+(test
+ (name test)
+ (modules Test)
+ (libraries hex hacl bip32-ed25519 alcotest))
+
+(executable
+ (name test_vector)
+ (libraries hex bip32-ed25519 hacl ezjsonm ocplib-json-typed)
+ (modules Test_vector))
+
+(alias
+ (name    runtest_bip32_ed25519_vectors)
+ (deps    test_vector.exe test_vectors/test_vectors.json)
+ (action  (run %{deps})))
