@@ -94,7 +94,7 @@ let equal { k ; c } { k = k' ; c = c' } =
   Bigstring.equal c c'
 
 let key { k ; _ } = underlying_key k
-let chaincode { c } = c
+let chaincode { c ; _ } = c
 
 let neuterize :
   type a. a Sign.key t -> public Sign.key t = fun ({ k ; _ } as key) ->
