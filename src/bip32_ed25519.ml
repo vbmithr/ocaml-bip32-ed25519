@@ -187,8 +187,8 @@ let derive_k z (kp : extended Sign.key) =
 let derive_a z ap =
   let zl8 = Z.(Bigstring.(sub z 0 28 |> to_string |> of_bits |> mul (of_int 8))) in
   let tweak = Ed25519.scalarmult_base zl8 in
-  let sum = Ed25519.add ap tweak in
-  if Ed25519.(equal sum (add sum sum)) then None
+  let sum = Ed25519.(add ap (cache tweak)) in
+  if Ed25519.(equal sum (add sum (cache sum))) then None
   else Some sum
 
 let derive :
